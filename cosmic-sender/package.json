@@ -1,0 +1,128 @@
+{
+  "name": "cosmic-sender",
+  "version": "1.0.0",
+  "description": "Cosmic Sender — a premium desktop email sending application for authorized transactional and opt-in email.",
+  "main": "dist/main/main/index.js",
+  "author": {
+    "name": "Cosmic Sender",
+    "email": "hello@cosmicsender.local"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "clean": "rimraf dist release",
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"wait-on http://localhost:5173 && npm:dev:main\" \"wait-on dist/main/index.js && cross-env NODE_ENV=development electron dist/main/index.js\"",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build": "npm run clean && npm run build:renderer && npm run build:main && npm run build:preload",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "cross-env NODE_ENV=production electron dist/main/main/index.js",
+    "dist": "node scripts/patch-electron-builder-arm64.js && npm run build && electron-builder --win nsis portable --x64",
+    "dist:linux-test": "npm run build && electron-builder --linux dir --x64"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "2.4.6",
+    "@types/better-sqlite3": "7.6.9",
+    "bcryptjs": "2.4.3",
+    "better-sqlite3": "11.3.0",
+    "electron-log": "5.2.0",
+    "electron-store": "8.2.0",
+    "keytar": "7.9.0",
+    "nodemailer": "6.9.15",
+    "uuid": "10.0.0",
+    "zod": "3.23.8",
+    "zustand": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@types/nodemailer": "6.4.15",
+    "@types/papaparse": "5.3.14",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/smtp-server": "3.5.10",
+    "@types/uuid": "10.0.0",
+    "@vitejs/plugin-react": "4.3.1",
+    "autoprefixer": "10.4.19",
+    "concurrently": "8.2.2",
+    "cross-env": "7.0.3",
+    "electron": "31.3.0",
+    "electron-builder": "24.13.3",
+    "lucide-react": "0.417.0",
+    "papaparse": "5.4.1",
+    "postcss": "8.4.39",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.25.1",
+    "rimraf": "5.0.9",
+    "smtp-server": "3.13.4",
+    "tailwindcss": "3.4.6",
+    "typescript": "5.5.3",
+    "vite": "5.3.4",
+    "vitest": "2.0.3",
+    "wait-on": "7.2.0"
+  },
+  "build": {
+    "appId": "com.cosmicsender.app",
+    "productName": "CosmicSender",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!node_modules/**/{CHANGELOG.md,README.md,readme.md,*.d.ts.map}",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "migrations",
+        "to": "migrations"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "${productName}-${version}-${arch}-${ext}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Cosmic Sender",
+      "uninstallDisplayName": "Cosmic Sender",
+      "artifactName": "CosmicSender-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "CosmicSender-Portable-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Office"
+    },
+    "npmRebuild": true
+  }
+}
