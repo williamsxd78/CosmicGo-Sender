@@ -52,3 +52,14 @@ Build a production-quality Windows desktop application called **Cosmic Sender**.
 - Attachment blocklist (.exe/.bat/.cmd/.scr/.msi/.ps1/.js/.vbs) + size limits
 - No emoji/executable content in emails
 - Secrets never logged (mask.ts) or exported
+
+## Windows build / signing pipeline (2026-01, iteration 2)
+- Restored production `win` config in package.json: `signAndEditExecutable` default, `signingHashAlgorithms=[sha256]`, `rfc3161TimeStampServer=http://timestamp.digicert.com`, `publisherName`, per-target artifact names.
+- Added Windows build helpers:
+  - `scripts/build-windows.ps1` — one-command Windows build (auto-detects `CSC_LINK`/`CSC_KEY_PASSWORD`, disables auto-discovery when unset).
+  - `scripts/build-windows.cmd` — cmd wrapper.
+  - `scripts/gen-self-signed-cert.ps1` — generates a test-only self-signed code-signing PFX.
+- Added CI workflow `.github/workflows/windows-build.yml` — Windows-2022 runner, `npm ci` + tests + `npm run dist`, uploads NSIS + portable artifacts, creates draft GitHub Release on tag pushes. Signs automatically when `CSC_LINK` / `CSC_KEY_PASSWORD` repository secrets are set.
+- New scripts: `npm run dist:nsis`, `npm run dist:portable`.
+- `scripts/patch-electron-builder-arm64.js` is a no-op on any non-ARM64-Linux host — safe to leave in the `dist` pipeline.
+- BUILD.md rewritten with step-by-step signing instructions, EV vs OV guidance, CI secrets setup, and `signtool verify` verification.
