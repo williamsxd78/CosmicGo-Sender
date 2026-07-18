@@ -11,7 +11,6 @@ on:
         type: boolean
         default: false
 
-# The project lives in the cosmic-sender/ subfolder of this repo.
 defaults:
   run:
     working-directory: cosmic-sender
@@ -30,27 +29,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-          cache-dependency-path: cosmic-sender/yarn.lock
+          # No cache config on purpose — the repo may not have a committed lockfile.
 
-      - name: Install dependencies (yarn)
-        run: yarn install --frozen-lockfile
+      - name: Install dependencies
+        # npm install works with or without a package-lock.json / yarn.lock.
+        # Not using --frozen-lockfile so a missing lockfile isn't fatal.
+        run: npm install --no-audit --no-fund
 
       - name: Run unit tests
-        run: yarn test
+        run: npm test
 
       - name: Build (signed)
         if: ${{ github.event.inputs.sign == 'true' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: yarn dist
+        run: npm run dist
 
       - name: Build (unsigned)
         if: ${{ github.event.inputs.sign != 'true' }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: yarn dist
+        run: npm run dist
 
       - name: List artifacts
         shell: pwsh
