@@ -42,6 +42,19 @@ export default function Dashboard() {
         <StatCard testid="stat-suppression" label="Suppression list" value={stats?.suppression_total ?? '—'} />
       </div>
 
+      {stats && stats.enabled_providers === 0 && (
+        <div className="px-8 mt-6">
+          <div className="cs-card p-5 flex items-center gap-4" data-testid="onboarding-banner">
+            <div className="h-12 w-12 rounded-xl bg-cosmic-accent/15 grid place-items-center text-cosmic-accent text-xl animate-pulse-glow">✦</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-lg">Welcome to Cosmic Sender</div>
+              <div className="text-sm text-cosmic-muted">Add an SMTP provider (Gmail, Amazon SES, Zoho, SendGrid…) to start sending. Test the connection, add a sender identity, then compose your first campaign.</div>
+            </div>
+            <button className="cs-btn cs-btn-primary" onClick={() => nav('/providers')} data-testid="onboarding-add-provider">Add SMTP provider</button>
+          </div>
+        </div>
+      )}
+
       <div className="px-8 mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="cs-card p-5 xl:col-span-2" data-testid="dash-volume-chart">
           <div className="flex items-center justify-between">

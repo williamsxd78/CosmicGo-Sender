@@ -6,6 +6,12 @@ let sessionUnlocked = false;
 let lastActivityAt = Date.now();
 
 export function isUnlocked(): boolean {
+  // If no password has been set, treat the app as unlocked (no auth wall).
+  // Users can optionally set a password from Settings → Security.
+  if (!hasPasswordSet()) {
+    if (!sessionUnlocked) sessionUnlocked = true;
+    return true;
+  }
   return sessionUnlocked;
 }
 

@@ -20,7 +20,7 @@ const navItems = [
   { to: '/logs', label: 'System Logs', icon: Terminal, testid: 'nav-logs' },
 ];
 
-export default function Shell({ children }: { children: ReactNode }) {
+export default function Shell({ children, hasPassword }: { children: ReactNode; hasPassword?: boolean }) {
   const { theme, setTheme, setLocked } = useUI();
   const nav = useNavigate();
 
@@ -74,14 +74,16 @@ export default function Shell({ children }: { children: ReactNode }) {
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           </button>
-          <button
-            data-testid="btn-lock"
-            onClick={handleLock}
-            className="cs-btn cs-btn-ghost w-full justify-start"
-          >
-            <Lock size={16} />
-            <span>Lock</span>
-          </button>
+          {hasPassword && (
+            <button
+              data-testid="btn-lock"
+              onClick={handleLock}
+              className="cs-btn cs-btn-ghost w-full justify-start"
+            >
+              <Lock size={16} />
+              <span>Lock</span>
+            </button>
+          )}
         </div>
       </aside>
 

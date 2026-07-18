@@ -4,7 +4,6 @@ import { useUI } from './store/ui';
 import Shell from './components/Shell';
 import ToastHost from './components/ToastHost';
 import ConfirmHost from './components/ConfirmHost';
-import Setup from './pages/Setup';
 import Lock from './pages/Lock';
 import Dashboard from './pages/Dashboard';
 import Providers from './pages/Providers';
@@ -21,18 +20,16 @@ import CampaignDetail from './pages/CampaignDetail';
 
 export default function App() {
   const [ready, setReady] = useState(false);
-  const [firstRun, setFirstRun] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
   const { theme, setTheme, locked, setLocked } = useUI();
 
   useEffect(() => {
     (async () => {
       const state = await window.cosmic.appState();
       if (state.ok) {
-        setFirstRun(state.data.first_run);
-        setUnlocked(state.data.unlocked);
+        // "first_run" now just means "no password set" — we don't force a wizard.
+        setHasPassword(!state.data.first_run);
       }
-      // Load settings for theme (only if unlocked; otherwise default dark)
       const s = await window.cosmic.getSettings();
       if (s.ok && s.data?.theme) setTheme(s.data.theme);
       else setTheme('dark');
@@ -43,7 +40,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Ensure the html class matches current theme (in case setTheme wasn't called yet)
     const html = document.documentElement;
     if (theme === 'dark') { html.classList.add('dark'); html.classList.remove('light'); }
     else { html.classList.add('light'); html.classList.remove('dark'); }
@@ -57,25 +53,11 @@ export default function App() {
     );
   }
 
-  if (firstRun) {
+  // Only show the lock screen if the user chose to set a password AND the session is locked.
+  if (hasPassword && locked) {
     return (
       <>
-        <Setup
-          onDone={() => {
-            setFirstRun(false);
-            setUnlocked(true);
-          }}
-        />
-        <ToastHost />
-        <ConfirmHost />
-      </>
-    );
-  }
-
-  if (!unlocked || locked) {
-    return (
-      <>
-        <Lock onUnlocked={() => { setUnlocked(true); setLocked(false); }} />
+        <Lock onUnlocked={() => setLocked(false)} />
         <ToastHost />
         <ConfirmHost />
       </>
@@ -83,7 +65,7 @@ export default function App() {
   }
 
   return (
-    <Shell>
+    <Shell hasPassword={hasPassword}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -97,7 +79,7 @@ export default function App() {
         <Route path="/suppression" element={<Suppression />} />
         <Route path="/history" element={<History />} />
         <Route path="/logs" element={<Logs />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={<SettingsPage onPasswordChange={setHasPassword} />} />
       </Routes>
       <ToastHost />
       <ConfirmHost />

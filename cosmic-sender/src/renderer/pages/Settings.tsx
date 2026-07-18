@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { PageHeader, Field } from '../components/UI';
 import { useUI } from '../store/ui';
 
-export default function SettingsPage() {
+export default function SettingsPage({ onPasswordChange }: { onPasswordChange?: (has: boolean) => void }) {
   const [settings, setSettings] = useState<any>(null);
   const [appState, setAppState] = useState<any>(null);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [next2, setNext2] = useState('');
   const { toast, setTheme } = useUI();
+
+  const hasPassword = appState && !appState.first_run;
 
   useEffect(() => {
     (async () => {
@@ -31,12 +33,21 @@ export default function SettingsPage() {
   };
 
   const changePw = async () => {
-    if (next.length < 8) return toast({ kind: 'error', title: 'Password too short' });
+    if (next.length < 8) return toast({ kind: 'error', title: 'Password too short (min 8 chars)' });
     if (next !== next2) return toast({ kind: 'error', title: 'Passwords do not match' });
-    const r = await window.cosmic.changePassword(current, next);
+    // If no password yet, use the "set initial password" endpoint. Otherwise, change.
+    const r = hasPassword
+      ? await window.cosmic.changePassword(current, next)
+      : await window.cosmic.setInitialPassword(next);
     if (!r.ok) return toast({ kind: 'error', title: 'Failed', description: r.error });
     setCurrent(''); setNext(''); setNext2('');
-    toast({ kind: 'success', title: 'Password changed' });
+    // Refresh appState to reflect new password status
+    const st = await window.cosmic.appState();
+    if (st.ok) {
+      setAppState(st.data);
+      onPasswordChange?.(!st.data.first_run);
+    }
+    toast({ kind: 'success', title: hasPassword ? 'Password changed' : 'Local password set — the app will now lock when you close it or after auto-lock timeout.' });
   };
 
   return (
@@ -67,10 +78,21 @@ export default function SettingsPage() {
           </Field>
           <div className="text-xs text-cosmic-muted">Credential backend: <span className="text-cosmic-text">{appState?.credential_backend ?? '—'}</span></div>
           <div className="border-t border-cosmic-border pt-3 mt-3 space-y-2">
-            <Field label="Current password"><input type="password" className="cs-input" value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>
-            <Field label="New password"><input type="password" className="cs-input" value={next} onChange={(e) => setNext(e.target.value)} /></Field>
-            <Field label="Confirm new password"><input type="password" className="cs-input" value={next2} onChange={(e) => setNext2(e.target.value)} /></Field>
-            <button className="cs-btn cs-btn-primary" onClick={changePw} data-testid="settings-change-password">Change password</button>
+            <div className="text-xs text-cosmic-muted">
+              {hasPassword
+                ? 'A local admin password is currently set. Change it below.'
+                : 'No local password is set. The app opens directly. Set one below to require unlocking on launch.'}
+            </div>
+            {hasPassword && (
+              <Field label="Current password"><input type="password" className="cs-input" value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>
+            )}
+            <Field label={hasPassword ? 'New password' : 'Set a password (min 8 chars)'}>
+              <input type="password" className="cs-input" value={next} onChange={(e) => setNext(e.target.value)} />
+            </Field>
+            <Field label="Confirm password"><input type="password" className="cs-input" value={next2} onChange={(e) => setNext2(e.target.value)} /></Field>
+            <button className="cs-btn cs-btn-primary" onClick={changePw} data-testid="settings-change-password">
+              {hasPassword ? 'Change password' : 'Enable password lock'}
+            </button>
           </div>
         </div>
 
