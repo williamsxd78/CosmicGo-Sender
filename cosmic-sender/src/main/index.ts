@@ -1,13 +1,51 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, protocol, shell, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import { runMigrations, getDataDir } from './db';
-import { registerIpc, getEngine } from './ipc';
-import * as auth from './auth';
-import { getSettings, updateSettings } from './settings';
-import { seedDemoData } from './seed';
-import { recoverInterrupted } from './campaigns';
-import { logActivity, logTechnical } from './logger';
+import { recordFatalCrash } from './crashLog';
+
+// --- Fail-fast early guards: capture any error before the app is ready. ---
+process.on('uncaughtException', (err) => {
+  recordFatalCrash('process.uncaughtException', err);
+  // Give the dialog a moment to render before exiting.
+  setTimeout(() => app.exit(1), 200);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  recordFatalCrash('process.unhandledRejection', reason);
+});
+
+// Wrap require() of our own modules in try/catch so a native-module ABI
+// mismatch or a bad path shows a visible dialog instead of silently exiting.
+let runMigrations: typeof import('./db').runMigrations;
+let getDataDir: typeof import('./db').getDataDir;
+let registerIpc: typeof import('./ipc').registerIpc;
+let getEngine: typeof import('./ipc').getEngine;
+let auth: typeof import('./auth');
+let getSettings: typeof import('./settings').getSettings;
+let seedDemoData: typeof import('./seed').seedDemoData;
+let recoverInterrupted: typeof import('./campaigns').recoverInterrupted;
+let logActivity: typeof import('./logger').logActivity;
+let logTechnical: typeof import('./logger').logTechnical;
+try {
+  ({ runMigrations, getDataDir } = require('./db'));
+  ({ registerIpc, getEngine } = require('./ipc'));
+  auth = require('./auth');
+  ({ getSettings } = require('./settings'));
+  ({ seedDemoData } = require('./seed'));
+  ({ recoverInterrupted } = require('./campaigns'));
+  ({ logActivity, logTechnical } = require('./logger'));
+} catch (err) {
+  recordFatalCrash('module.require', err);
+  // Don't crash silently; wait for ready then show the dialog and exit.
+  app.whenReady().then(() => {
+    dialog.showErrorBox(
+      'Cosmic Sender — startup module failed',
+      `A required module could not load. This is usually a native-module ABI mismatch caused by cross-building on a different architecture.\n\nError: ${(err as Error).message}\n\nFix: rebuild the app on Windows (npm run dist) or via the included GitHub Actions workflow.`,
+    );
+    app.exit(1);
+  });
+  // Halt the rest of this file if the above throws in production.
+  throw err;
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -156,8 +194,8 @@ app.whenReady().then(async () => {
     createTray();
     logActivity('Cosmic Sender started');
   } catch (err) {
-    dialog.showErrorBox('Cosmic Sender', 'Failed to start: ' + (err as Error).message);
-    app.quit();
+    recordFatalCrash('app.whenReady', err);
+    app.exit(1);
   }
 });
 
@@ -171,10 +209,3 @@ app.on('activate', () => {
 
 // Only allow the local file protocol and disallow arbitrary shell exec
 protocol && protocol.registerSchemesAsPrivileged?.([]);
-
-process.on('uncaughtException', (err) => {
-  logTechnical('process', 'uncaughtException', { message: err.message, stack: err.stack }, 'error');
-});
-process.on('unhandledRejection', (reason: any) => {
-  logTechnical('process', 'unhandledRejection', { message: reason?.message ?? String(reason) }, 'error');
-});
