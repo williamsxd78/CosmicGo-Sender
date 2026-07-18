@@ -83,3 +83,9 @@ android-sdk/cosmic-sender/release/win-unpacked/CosmicSender.exe
 cosmic-sender/release/win-unpacked/CosmicSender.exe
 cosmic-sender/node_modules/electron/dist/electron
 cosmic-sender/node_modules/electron/dist/electron
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
