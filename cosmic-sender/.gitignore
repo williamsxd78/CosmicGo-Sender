@@ -1,9 +1,10 @@
 node_modules/
 dist/
 
-# release/ — keep only the final .exe artifacts; ignore intermediates.
-release/*
-!release/*.exe
+# release/ is intentionally NOT committed to git — the GitHub Actions Windows
+# workflow builds fresh, working .exe files and attaches them to workflow
+# artifacts / GitHub Releases.
+release/
 
 .env
 .env.local

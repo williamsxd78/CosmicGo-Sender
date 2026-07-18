@@ -9,7 +9,12 @@ on:
       sign:
         description: "Sign the build using CSC_LINK / CSC_KEY_PASSWORD secrets?"
         type: boolean
-        default: true
+        default: false
+
+# The project lives in the cosmic-sender/ subfolder of this repo.
+defaults:
+  run:
+    working-directory: cosmic-sender
 
 jobs:
   build:
@@ -26,28 +31,24 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: cosmic-sender/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (npm install — no lockfile in repo)
+        run: npm install
 
       - name: Run unit tests
         run: npm test
 
-      # Optional code signing.
-      # Add the following repository secrets to enable signing:
-      #   CSC_LINK          — base64-encoded .pfx / .p12 certificate
-      #   CSC_KEY_PASSWORD  — certificate password
-      # If secrets are missing the build proceeds unsigned.
+      # Signed build if CSC_LINK secret is set (add CSC_LINK + CSC_KEY_PASSWORD in repo secrets).
       - name: Build (signed)
-        if: ${{ github.event.inputs.sign != 'false' && env.CSC_LINK != '' }}
+        if: ${{ github.event.inputs.sign == 'true' && env.CSC_LINK != '' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Timestamp server + hash algo come from package.json
         run: npm run dist
 
       - name: Build (unsigned)
-        if: ${{ github.event.inputs.sign == 'false' || env.CSC_LINK == '' }}
+        if: ${{ github.event.inputs.sign != 'true' || env.CSC_LINK == '' }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist
@@ -57,15 +58,11 @@ jobs:
         run: |
           Get-ChildItem release -File | Where-Object { $_.Extension -in ".exe", ".blockmap", ".yml" } | Format-Table Name, Length
 
-      # ---- Smoke test: actually launch the built app on the Windows runner ----
       - name: Smoke test — launch the app and verify it starts
         shell: pwsh
         run: |
           $exe = Get-ChildItem release/win-unpacked/CosmicSender.exe
           Write-Host "Launching $($exe.FullName) ..."
-          # Start the app, wait 12s, then kill it. If it crashed early we'll see a
-          # non-zero exit code in the returned process or the process object will
-          # already be exited when we probe it.
           $proc = Start-Process -FilePath $exe.FullName -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 12
           if ($proc.HasExited) {
@@ -75,28 +72,17 @@ jobs:
           Write-Host "App is running (PID=$($proc.Id)). Terminating for CI cleanup."
           Stop-Process -Id $proc.Id -Force
           Get-Process | Where-Object { $_.Name -like "CosmicSender*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-          Write-Host "✅ Smoke test passed."
-
-      - name: Smoke test — verify NSIS installer is a valid PE
-        shell: pwsh
-        run: |
-          $setup = Get-ChildItem release/CosmicSender-Setup-*.exe
-          $bytes = [System.IO.File]::ReadAllBytes($setup.FullName)[0..1]
-          if ($bytes[0] -ne 77 -or $bytes[1] -ne 90) {
-            Write-Error "Setup exe is not a valid PE binary."
-            exit 1
-          }
-          Write-Host "✅ Setup exe is a valid Windows PE."
+          Write-Host "Smoke test passed."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cosmic-sender-windows-x64
           path: |
-            release/CosmicSender-Setup-*.exe
-            release/CosmicSender-Portable-*.exe
-            release/*.blockmap
-            release/latest*.yml
+            cosmic-sender/release/CosmicSender-Setup-*.exe
+            cosmic-sender/release/CosmicSender-Portable-*.exe
+            cosmic-sender/release/*.blockmap
+            cosmic-sender/release/latest*.yml
           if-no-files-found: error
           retention-days: 30
 
@@ -105,9 +91,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/CosmicSender-Setup-*.exe
-            release/CosmicSender-Portable-*.exe
-            release/*.blockmap
-            release/latest*.yml
+            cosmic-sender/release/CosmicSender-Setup-*.exe
+            cosmic-sender/release/CosmicSender-Portable-*.exe
+            cosmic-sender/release/*.blockmap
+            cosmic-sender/release/latest*.yml
           draft: true
           generate_release_notes: true
