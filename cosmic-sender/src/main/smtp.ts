@@ -24,6 +24,12 @@ export interface SmtpTestResult {
 function encryptionToTransport(encryption: EncryptionType, port: number) {
   if (encryption === 'SSL_TLS') return { secure: true, requireTLS: false };
   if (encryption === 'STARTTLS') return { secure: false, requireTLS: true };
+  if (encryption === 'AUTO') {
+    // Auto = infer from port. 465 = implicit SSL, 587/25 = STARTTLS.
+    if (port === 465) return { secure: true, requireTLS: false };
+    if (port === 587 || port === 25 || port === 2525) return { secure: false, requireTLS: true };
+    return { secure: port === 465, requireTLS: false };
+  }
   return { secure: port === 465, requireTLS: false };
 }
 

@@ -26,8 +26,8 @@ export default function Providers() {
   useEffect(() => { void refresh(); }, []);
 
   const empty = () => ({
-    kind: 'AMAZON_SES', name: '', slug: '', host: 'email-smtp.eu-central-1.amazonaws.com', port: 587,
-    encryption: 'STARTTLS', username: '', password: '',
+    kind: 'STANDARD_SMTP', name: '', slug: '', host: '', port: 587,
+    encryption: 'AUTO', username: '', password: '',
     default_from_name: '', default_from_email: '', reply_to: '',
     hourly_limit: 1000, daily_limit: 10000, rate_limit_per_minute: 10,
     connection_timeout_ms: 30000, max_retries: 3, enabled: true, region: 'eu-central-1', notes: '',
@@ -158,69 +158,142 @@ export default function Providers() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Smart per-kind presets. When the user picks a "Kind", we prefill sensible
+// defaults so they only need to enter username, password, and from-address.
+// ---------------------------------------------------------------------------
+const KIND_PRESETS: Record<string, {
+  label: string;
+  host: string;
+  port: number;
+  encryption: 'AUTO' | 'STARTTLS' | 'SSL_TLS' | 'NONE';
+  usernameHint?: string;
+  helpUrl?: string;
+}> = {
+  AMAZON_SES:    { label: 'Amazon SES',   host: 'email-smtp.eu-central-1.amazonaws.com', port: 587, encryption: 'STARTTLS', usernameHint: 'SMTP username from AWS SES (e.g. AKIA…)', helpUrl: 'https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html' },
+  GMAIL:         { label: 'Gmail',        host: 'smtp.gmail.com',       port: 587, encryption: 'STARTTLS', usernameHint: 'Your Gmail address. Use an App Password, not your login password.', helpUrl: 'https://support.google.com/mail/answer/185833' },
+  MICROSOFT_365: { label: 'Microsoft 365',host: 'smtp.office365.com',   port: 587, encryption: 'STARTTLS', usernameHint: 'Your full Microsoft 365 email address' },
+  ZOHO:          { label: 'Zoho',         host: 'smtp.zoho.com',        port: 587, encryption: 'STARTTLS', usernameHint: 'Your Zoho email address' },
+  SENDGRID:      { label: 'SendGrid',     host: 'smtp.sendgrid.net',    port: 587, encryption: 'STARTTLS', usernameHint: 'Literal string "apikey"' },
+  MAILGUN:       { label: 'Mailgun',      host: 'smtp.mailgun.org',     port: 587, encryption: 'STARTTLS', usernameHint: 'postmaster@yourdomain.mailgun.org' },
+  STANDARD_SMTP: { label: 'Standard SMTP',host: '',                     port: 587, encryption: 'AUTO' },
+  CUSTOM_SMTP:   { label: 'Custom SMTP',  host: '',                     port: 587, encryption: 'AUTO' },
+};
+
 function ProviderForm({ value, onChange, onCancel, onSave, sesRegions }: any) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const preset = KIND_PRESETS[value.kind] ?? KIND_PRESETS.CUSTOM_SMTP;
+  const isSes = value.kind === 'AMAZON_SES';
+
+  const applyKindPreset = (kind: string) => {
+    const p = KIND_PRESETS[kind] ?? KIND_PRESETS.CUSTOM_SMTP;
+    onChange({
+      ...value,
+      kind,
+      host: value.guid ? value.host : p.host,
+      port: value.guid ? value.port : p.port,
+      encryption: value.guid ? value.encryption : p.encryption,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-[150] grid place-items-center bg-black/60 backdrop-blur-sm" data-testid="provider-form">
-      <div className="cs-card p-6 w-[700px] max-w-[95vw] max-h-[92vh] overflow-y-auto">
-        <div className="font-display text-2xl mb-4">{value.guid ? 'Edit provider' : 'Add provider'}</div>
+      <div className="cs-card p-6 w-[640px] max-w-[95vw] max-h-[92vh] overflow-y-auto">
+        <div className="font-display text-2xl mb-1">{value.guid ? 'Edit provider' : 'Add provider'}</div>
+        <div className="text-xs text-cosmic-muted mb-4">Pick a provider type — we'll prefill host, port, and security. You only need to enter credentials.</div>
+
+        {/* Kind picker as visual cards for common providers */}
+        <div className="grid grid-cols-4 gap-2 mb-5" data-testid="kind-picker">
+          {Object.entries(KIND_PRESETS).map(([k, p]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => applyKindPreset(k)}
+              data-testid={`kind-${k}`}
+              className={`cs-panel px-2 py-2 text-xs text-center transition-all ${value.kind === k ? 'ring-2 ring-cosmic-accent text-white' : 'text-cosmic-muted hover:text-white hover:bg-white/[0.03]'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Kind">
-            <select className="cs-input" value={value.kind} onChange={(e) => onChange({ ...value, kind: e.target.value })}>
-              <option value="AMAZON_SES">Amazon SES</option>
-              <option value="STANDARD_SMTP">Standard SMTP</option>
-              <option value="GMAIL">Gmail</option>
-              <option value="MICROSOFT_365">Microsoft 365</option>
-              <option value="ZOHO">Zoho</option>
-              <option value="SENDGRID">SendGrid</option>
-              <option value="MAILGUN">Mailgun</option>
-              <option value="CUSTOM_SMTP">Custom SMTP</option>
-            </select>
+          <Field label="Name" hint="A friendly label — e.g. 'Work Gmail', 'Marketing SES'.">
+            <input data-testid="provider-name" className="cs-input" value={value.name} onChange={(e) => {
+              const name = e.target.value;
+              const slug = value.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+              onChange({ ...value, name, slug });
+            }} />
           </Field>
-          <Field label="Name"><input data-testid="provider-name" className="cs-input" value={value.name} onChange={(e) => onChange({ ...value, name: e.target.value })} /></Field>
-          <Field label="Slug"><input className="cs-input" value={value.slug} onChange={(e) => onChange({ ...value, slug: e.target.value.toLowerCase() })} /></Field>
-          {value.kind === 'AMAZON_SES' ? (
-            <Field label="AWS Region" hint="Amazon SES SMTP credentials are region-specific.">
-              <select className="cs-input" value={value.region ?? ''} onChange={(e) => {
-                const region = e.target.value;
-                onChange({ ...value, region, host: `email-smtp.${region}.amazonaws.com` });
-              }}>
-                {sesRegions.map((r: string) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </Field>
-          ) : (
-            <Field label="Region (optional)"><input className="cs-input" value={value.region ?? ''} onChange={(e) => onChange({ ...value, region: e.target.value })} /></Field>
-          )}
-          <Field label="SMTP Host"><input data-testid="provider-host" className="cs-input" value={value.host} onChange={(e) => onChange({ ...value, host: e.target.value })} /></Field>
-          <Field label="Port"><input data-testid="provider-port" className="cs-input" type="number" value={value.port} onChange={(e) => onChange({ ...value, port: Number(e.target.value) })} /></Field>
-          <Field label="Encryption" hint="Port 587 → STARTTLS, port 465 → SSL/TLS.">
-            <select data-testid="provider-encryption" className="cs-input" value={value.encryption} onChange={(e) => onChange({ ...value, encryption: e.target.value })}>
-              <option value="NONE">None</option>
-              <option value="STARTTLS">STARTTLS</option>
-              <option value="SSL_TLS">SSL/TLS</option>
-            </select>
-          </Field>
-          <Field label="Username"><input data-testid="provider-username" className="cs-input" value={value.username} onChange={(e) => onChange({ ...value, username: e.target.value })} /></Field>
-          <Field label="Password" hint={value.guid ? 'Leave blank to keep the stored password.' : 'Stored in OS credential manager.'}>
-            <input data-testid="provider-password" className="cs-input" type="password" value={value.password} onChange={(e) => onChange({ ...value, password: e.target.value })} />
-          </Field>
-          <Field label="Default From Name"><input className="cs-input" value={value.default_from_name} onChange={(e) => onChange({ ...value, default_from_name: e.target.value })} /></Field>
-          <Field label="Default From Email"><input data-testid="provider-from-email" className="cs-input" value={value.default_from_email} onChange={(e) => onChange({ ...value, default_from_email: e.target.value })} /></Field>
-          <Field label="Reply-to (optional)"><input className="cs-input" value={value.reply_to ?? ''} onChange={(e) => onChange({ ...value, reply_to: e.target.value })} /></Field>
-          <Field label="Rate limit / minute"><input className="cs-input" type="number" value={value.rate_limit_per_minute} onChange={(e) => onChange({ ...value, rate_limit_per_minute: Number(e.target.value) })} /></Field>
-          <Field label="Hourly limit"><input className="cs-input" type="number" value={value.hourly_limit} onChange={(e) => onChange({ ...value, hourly_limit: Number(e.target.value) })} /></Field>
-          <Field label="Daily limit"><input className="cs-input" type="number" value={value.daily_limit} onChange={(e) => onChange({ ...value, daily_limit: Number(e.target.value) })} /></Field>
-          <Field label="Connection timeout (ms)"><input className="cs-input" type="number" value={value.connection_timeout_ms} onChange={(e) => onChange({ ...value, connection_timeout_ms: Number(e.target.value) })} /></Field>
-          <Field label="Max retries"><input className="cs-input" type="number" value={value.max_retries} onChange={(e) => onChange({ ...value, max_retries: Number(e.target.value) })} /></Field>
           <Field label="Enabled">
             <select className="cs-input" value={value.enabled ? 'yes' : 'no'} onChange={(e) => onChange({ ...value, enabled: e.target.value === 'yes' })}>
               <option value="yes">Enabled</option>
               <option value="no">Disabled</option>
             </select>
           </Field>
+
+          {isSes && (
+            <Field label="AWS Region" hint="Amazon SES SMTP credentials are region-specific.">
+              <select className="cs-input" value={value.region ?? 'eu-central-1'} onChange={(e) => {
+                const region = e.target.value;
+                onChange({ ...value, region, host: `email-smtp.${region}.amazonaws.com` });
+              }}>
+                {sesRegions.map((r: string) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+          )}
+
+          <Field label="SMTP Host">
+            <input data-testid="provider-host" className="cs-input" value={value.host} onChange={(e) => onChange({ ...value, host: e.target.value })} readOnly={isSes} />
+          </Field>
+          <Field label="Port" hint="587 = STARTTLS, 465 = SSL/TLS, 25 = plain (rare)">
+            <input data-testid="provider-port" className="cs-input" type="number" value={value.port} onChange={(e) => onChange({ ...value, port: Number(e.target.value) })} />
+          </Field>
+          <Field label="Security" hint="Auto picks the right mode from the port.">
+            <select data-testid="provider-encryption" className="cs-input" value={value.encryption} onChange={(e) => onChange({ ...value, encryption: e.target.value })}>
+              <option value="AUTO">Auto (recommended)</option>
+              <option value="STARTTLS">STARTTLS</option>
+              <option value="SSL_TLS">SSL / TLS</option>
+              <option value="NONE">None</option>
+            </select>
+          </Field>
+
+          <Field label="Username" hint={preset.usernameHint}>
+            <input data-testid="provider-username" className="cs-input" value={value.username} onChange={(e) => onChange({ ...value, username: e.target.value })} />
+          </Field>
+          <Field label="Password" hint={value.guid ? 'Leave blank to keep the stored password.' : 'Stored in Windows Credential Manager, never in the DB.'}>
+            <input data-testid="provider-password" className="cs-input" type="password" value={value.password} onChange={(e) => onChange({ ...value, password: e.target.value })} />
+          </Field>
+
+          <Field label="From name">
+            <input className="cs-input" value={value.default_from_name} onChange={(e) => onChange({ ...value, default_from_name: e.target.value })} placeholder="Your Company" />
+          </Field>
+          <Field label="From email">
+            <input data-testid="provider-from-email" className="cs-input" value={value.default_from_email} onChange={(e) => onChange({ ...value, default_from_email: e.target.value })} placeholder="hello@yourdomain.com" />
+          </Field>
         </div>
+
+        {/* Advanced settings — hidden by default */}
+        <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs text-cosmic-accent hover:underline mt-5" data-testid="toggle-advanced">
+          {showAdvanced ? '▾ Hide advanced settings' : '▸ Advanced settings (rate limits, retries, reply-to, notes)'}
+        </button>
+
+        {showAdvanced && (
+          <div className="grid grid-cols-2 gap-3 mt-3 border-t border-cosmic-border pt-4" data-testid="advanced-settings">
+            <Field label="Reply-to (optional)"><input className="cs-input" value={value.reply_to ?? ''} onChange={(e) => onChange({ ...value, reply_to: e.target.value })} /></Field>
+            <Field label="Rate limit / minute"><input className="cs-input" type="number" value={value.rate_limit_per_minute} onChange={(e) => onChange({ ...value, rate_limit_per_minute: Number(e.target.value) })} /></Field>
+            <Field label="Hourly limit"><input className="cs-input" type="number" value={value.hourly_limit} onChange={(e) => onChange({ ...value, hourly_limit: Number(e.target.value) })} /></Field>
+            <Field label="Daily limit"><input className="cs-input" type="number" value={value.daily_limit} onChange={(e) => onChange({ ...value, daily_limit: Number(e.target.value) })} /></Field>
+            <Field label="Connection timeout (ms)"><input className="cs-input" type="number" value={value.connection_timeout_ms} onChange={(e) => onChange({ ...value, connection_timeout_ms: Number(e.target.value) })} /></Field>
+            <Field label="Max retries"><input className="cs-input" type="number" value={value.max_retries} onChange={(e) => onChange({ ...value, max_retries: Number(e.target.value) })} /></Field>
+            <Field label="Slug (internal id)"><input className="cs-input" value={value.slug} onChange={(e) => onChange({ ...value, slug: e.target.value.toLowerCase() })} /></Field>
+            <Field label="Notes"><input className="cs-input" value={value.notes ?? ''} onChange={(e) => onChange({ ...value, notes: e.target.value })} /></Field>
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 mt-6">
           <button className="cs-btn cs-btn-ghost" onClick={onCancel} data-testid="provider-cancel">Cancel</button>
-          <button className="cs-btn cs-btn-primary" onClick={onSave} data-testid="provider-save"><Save size={14} /> Save</button>
+          <button className="cs-btn cs-btn-primary" onClick={onSave} data-testid="provider-save"><Save size={14} /> Save provider</button>
         </div>
       </div>
     </div>

@@ -49,6 +49,19 @@ export default function Setup({ onDone }: { onDone: () => void }) {
 
   const stepPercent = (step / (steps.length - 1)) * 100;
 
+  const SETUP_PRESETS: Record<string, { host: string; port: number; encryption: string; hint?: string }> = {
+    AMAZON_SES:    { host: 'email-smtp.eu-central-1.amazonaws.com', port: 587, encryption: 'STARTTLS', hint: 'Change region if not eu-central-1.' },
+    GMAIL:         { host: 'smtp.gmail.com',       port: 587, encryption: 'STARTTLS', hint: 'Use an App Password, not your login password.' },
+    MICROSOFT_365: { host: 'smtp.office365.com',   port: 587, encryption: 'STARTTLS' },
+    ZOHO:          { host: 'smtp.zoho.com',        port: 587, encryption: 'STARTTLS' },
+    SENDGRID:      { host: 'smtp.sendgrid.net',    port: 587, encryption: 'STARTTLS', hint: 'Username is literally "apikey".' },
+    MAILGUN:       { host: 'smtp.mailgun.org',     port: 587, encryption: 'STARTTLS' },
+    STANDARD_SMTP: { host: '',                     port: 587, encryption: 'AUTO' },
+    CUSTOM_SMTP:   { host: '',                     port: 587, encryption: 'AUTO' },
+  };
+  const currentPreset = SETUP_PRESETS[form.kind] ?? SETUP_PRESETS.STANDARD_SMTP;
+  const isSetupSes = form.kind === 'AMAZON_SES';
+
   return (
     <div className="min-h-full grid place-items-center py-10 px-4" data-testid="setup-wizard">
       <div className="cs-card w-full max-w-2xl p-8">
@@ -147,41 +160,45 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         {step === 3 && (
           <div className="space-y-4" data-testid="setup-step-provider">
             <p className="text-sm text-cosmic-muted">
-              Add your first SMTP provider. Amazon SES SMTP credentials are region-specific — pick the same region
-              you configured in AWS.
+              Add your first SMTP provider. Pick the type — we'll prefill host, port, and security. You only need username / password / from-address.
             </p>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {Object.keys(SETUP_PRESETS).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  data-testid={`setup-kind-${k}`}
+                  onClick={() => {
+                    const p = SETUP_PRESETS[k];
+                    setForm({ ...form, kind: k, host: p.host || form.host, port: p.port, encryption: p.encryption });
+                  }}
+                  className={`cs-panel px-2 py-2 text-xs text-center transition-all ${form.kind === k ? 'ring-2 ring-cosmic-accent text-white' : 'text-cosmic-muted hover:text-white hover:bg-white/[0.03]'}`}
+                >
+                  {k === 'AMAZON_SES' ? 'Amazon SES' : k === 'MICROSOFT_365' ? 'Microsoft 365' : k === 'STANDARD_SMTP' ? 'Standard' : k === 'CUSTOM_SMTP' ? 'Custom' : k.charAt(0) + k.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+            {currentPreset.hint && <div className="text-xs text-cosmic-muted italic">💡 {currentPreset.hint}</div>}
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Kind">
-                <select data-testid="setup-provider-kind" className="cs-input" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-                  <option value="AMAZON_SES">Amazon SES</option>
-                  <option value="STANDARD_SMTP">Standard SMTP</option>
-                  <option value="GMAIL">Gmail</option>
-                  <option value="MICROSOFT_365">Microsoft 365</option>
-                  <option value="ZOHO">Zoho</option>
-                  <option value="SENDGRID">SendGrid</option>
-                  <option value="MAILGUN">Mailgun</option>
-                  <option value="CUSTOM_SMTP">Custom SMTP</option>
-                </select>
-              </Field>
               <Field label="Name">
                 <input data-testid="setup-provider-name" className="cs-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
-              <Field label="Slug">
-                <input className="cs-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
-              </Field>
-              <Field label="Region">
-                <input className="cs-input" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
-              </Field>
+              {isSetupSes && (
+                <Field label="AWS Region">
+                  <input className="cs-input" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value, host: `email-smtp.${e.target.value}.amazonaws.com` })} />
+                </Field>
+              )}
               <Field label="Host">
-                <input data-testid="setup-provider-host" className="cs-input" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+                <input data-testid="setup-provider-host" className="cs-input" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} readOnly={isSetupSes} />
               </Field>
               <Field label="Port">
                 <input data-testid="setup-provider-port" className="cs-input" type="number" value={form.port} onChange={(e) => setForm({ ...form, port: Number(e.target.value) })} />
               </Field>
-              <Field label="Encryption">
+              <Field label="Security">
                 <select data-testid="setup-provider-encryption" className="cs-input" value={form.encryption} onChange={(e) => setForm({ ...form, encryption: e.target.value })}>
+                  <option value="AUTO">Auto (recommended)</option>
                   <option value="STARTTLS">STARTTLS</option>
-                  <option value="SSL_TLS">SSL/TLS</option>
+                  <option value="SSL_TLS">SSL / TLS</option>
                   <option value="NONE">None</option>
                 </select>
               </Field>
@@ -191,20 +208,18 @@ export default function Setup({ onDone }: { onDone: () => void }) {
               <Field label="Password">
                 <input data-testid="setup-provider-password" className="cs-input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </Field>
-              <Field label="Default From Name">
+              <Field label="From name">
                 <input className="cs-input" value={form.default_from_name} onChange={(e) => setForm({ ...form, default_from_name: e.target.value })} />
               </Field>
-              <Field label="Default From Email">
+              <Field label="From email">
                 <input data-testid="setup-provider-from-email" className="cs-input" value={form.default_from_email} onChange={(e) => setForm({ ...form, default_from_email: e.target.value })} />
-              </Field>
-              <Field label="Rate limit / minute">
-                <input className="cs-input" type="number" value={form.rate_limit_per_minute} onChange={(e) => setForm({ ...form, rate_limit_per_minute: Number(e.target.value) })} />
               </Field>
             </div>
             <NextBackButtons
               nextLabel="Save & continue"
               onNext={async () => {
-                const res = await window.cosmic.createProvider(form);
+                const slug = form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `provider-${Date.now()}`;
+                const res = await window.cosmic.createProvider({ ...form, slug });
                 if (!res.ok) return toast({ kind: 'error', title: 'Could not save provider', description: res.error });
                 setProviderId((res.data as any).guid);
                 toast({ kind: 'success', title: 'Provider saved' });

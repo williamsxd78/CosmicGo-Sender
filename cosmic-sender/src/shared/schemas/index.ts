@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /* ------------------------------ Enums ------------------------------ */
-export const EncryptionType = z.enum(['NONE', 'STARTTLS', 'SSL_TLS']);
+export const EncryptionType = z.enum(['AUTO', 'NONE', 'STARTTLS', 'SSL_TLS']);
 export type EncryptionType = z.infer<typeof EncryptionType>;
 
 export const ProviderKind = z.enum([
