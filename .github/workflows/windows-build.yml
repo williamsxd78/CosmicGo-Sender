@@ -30,28 +30,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: cosmic-sender/package-lock.json
+          cache: "yarn"
+          cache-dependency-path: cosmic-sender/yarn.lock
 
-      - name: Install dependencies (npm install — no lockfile in repo)
-        run: npm install
+      - name: Install dependencies (yarn)
+        run: yarn install --frozen-lockfile
 
       - name: Run unit tests
-        run: npm test
+        run: yarn test
 
-      # Signed build if CSC_LINK secret is set (add CSC_LINK + CSC_KEY_PASSWORD in repo secrets).
       - name: Build (signed)
-        if: ${{ github.event.inputs.sign == 'true' && env.CSC_LINK != '' }}
+        if: ${{ github.event.inputs.sign == 'true' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npm run dist
+        run: yarn dist
 
       - name: Build (unsigned)
-        if: ${{ github.event.inputs.sign != 'true' || env.CSC_LINK == '' }}
+        if: ${{ github.event.inputs.sign != 'true' }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run dist
+        run: yarn dist
 
       - name: List artifacts
         shell: pwsh
