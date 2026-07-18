@@ -1,6 +1,10 @@
 node_modules/
 dist/
-release/
+
+# release/ — keep only the final .exe artifacts; ignore intermediates.
+release/*
+!release/*.exe
+
 .env
 .env.local
 *.log
